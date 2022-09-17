@@ -1,3 +1,4 @@
+#include "kernel/types.h"
 #include "user/user.h"
 
 int main()
@@ -14,7 +15,7 @@ int main()
 
         char buf[64];
         read(p1[0], buf, sizeof(buf));
-        fprintf(1, "%d: received ping", pid);
+        fprintf(1, "%d: received ping\n", pid);
         write(p2[1], "1", 1);
     }
     else
@@ -25,7 +26,7 @@ int main()
         char buf[64];
         write(p1[1], "1", 1);
         read(p2[0], buf, sizeof(buf));
-        fprintf(1, "%d: received pong", pid);
+        fprintf(1, "%d: received pong\n", pid);
     }
 
     exit(0);

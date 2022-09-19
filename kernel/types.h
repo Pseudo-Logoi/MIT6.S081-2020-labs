@@ -8,3 +8,6 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 typedef uint64 pde_t;
+
+#define INT32MAX 0x7FFFFFFF
+#define INT32MIN 0x80000000

@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -107,6 +108,29 @@ sys_trace(void)
 
     struct proc *p = myproc();
     p->mask = mask;
+
+    return 0;
+}
+
+uint64
+sys_sysinfo(void)
+{
+    // 获取当前运行的进程
+    struct proc *p = myproc();
+
+    // 获取输入参数（用户空间的sysinfo结构体虚拟地址）
+    uint64 pInfoUserSpace;
+    if (argaddr(0, &pInfoUserSpace) < 0)
+        return -1;
+
+    // 生成内核空间数据
+    struct sysinfo InfoKernelSpace;
+    InfoKernelSpace.freemem = getfreemem();
+    InfoKernelSpace.nproc = getnproc();
+
+    // 拷贝至用户空间
+    if (copyout(p->pagetable, pInfoUserSpace, (char *)&InfoKernelSpace, sizeof(InfoKernelSpace)) < 0)
+        return -1;
 
     return 0;
 }

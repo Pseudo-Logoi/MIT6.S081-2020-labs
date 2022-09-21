@@ -320,9 +320,10 @@ sfence_vma()
 }
 
 
-#define PGSIZE 4096 // bytes per page
+#define PGSIZE 4096 // bytes per page 0x1000
 #define PGSHIFT 12  // bits of offset within a page
 
+// 找到从sz开始的向上第一个页的地址
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
 

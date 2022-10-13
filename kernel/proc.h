@@ -105,5 +105,5 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   // for trace
-  int mask;
+  int mask; // track系统调用参数
 };

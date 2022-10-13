@@ -92,10 +92,10 @@ uint64 getfreemem(void)
   r = kmem.freelist; // 空间耗尽时为0
   while(r)
   {
-    ++result;
+    result += PGSIZE;
     r = r->next;
   }
   release(&kmem.lock);
 
-  return result * PGSIZE;
+  return result;
 }

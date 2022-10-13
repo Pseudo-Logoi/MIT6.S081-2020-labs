@@ -16,6 +16,12 @@
 // kernel printing usertrap messages, which can be ignored if test
 // prints "OK".
 //
+/*
+测试xv6系统调用。
+不带参数的usertests将运行所有测试，而usertests <name>将运行<name>测试。
+测试运行程序为每个测试创建一个进程，并根据进程的退出状态，测试运行程序报告“OK”或“FAILED”。
+一些测试会导致内核打印usertrap消息，如果测试打印“OK”，则可以忽略这些消息。
+*/
 
 #define BUFSZ  (MAXOPBLOCKS+2)*BSIZE
 

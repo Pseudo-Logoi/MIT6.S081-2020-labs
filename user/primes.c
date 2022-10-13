@@ -5,7 +5,7 @@ int findPrimes(int inputfd)
 {
     int prime;
     read(inputfd, &prime, sizeof(int));
-    fprintf(1, "primes %d\n", prime);
+    fprintf(1, "prime %d\n", prime);
 
     int p[2] = {0, 0};
     int num;

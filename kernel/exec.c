@@ -32,7 +32,7 @@ exec(char *path, char **argv)
   // Check ELF header
   if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
-  if(elf.magic != ELF_MAGIC)
+  if(elf.magic != ELF_MAGIC) // 检查elf文件是否良好，如果elf.magic是对的，就假定elf文件没问题
     goto bad;
 
   if((pagetable = proc_pagetable(p)) == 0)

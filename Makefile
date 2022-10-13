@@ -3,6 +3,7 @@
 # (e.g., LB=util).  Run make grade to test solution with the lab's
 # grade script (e.g., grade-lab-util).
 
+# 定义了变量LAB，某个实验
 -include conf/lab.mk
 
 K=kernel

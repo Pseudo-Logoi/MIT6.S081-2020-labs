@@ -1,1 +1,0 @@
-find . -name "*.o" -o -name "*.d" -o -name "*.asm" -o -name "*.sym" -o -name "_*" | xargs rm -rf

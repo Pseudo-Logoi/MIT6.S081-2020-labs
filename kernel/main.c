@@ -21,7 +21,7 @@ main()
     printf("\n");
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
-    kvminithart();   // turn on paging
+    kvminithart();   // turn on paging // 从这里所有地址都是虚拟地址了
     procinit();      // process table
     trapinit();      // trap vectors
     trapinithart();  // install kernel trap vector

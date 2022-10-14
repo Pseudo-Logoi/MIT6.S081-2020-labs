@@ -54,32 +54,32 @@ pagetable_t kvminit_proc()
 
   // uart registers
   if(mappages(proc_kernel_pagetable, UART0, PGSIZE, UART0, PTE_R | PTE_W) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : UART0 --(PGSIZE)-> UART0");
 
   // virtio mmio disk interface
   if(mappages(proc_kernel_pagetable, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : VIRTIO0 --(PGSIZE)-> VIRTIO0");
 
   // CLINT
   if(mappages(proc_kernel_pagetable, CLINT, 0x10000, CLINT, PTE_R | PTE_W) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : CLINT --(0x10000)-> CLINT");
 
   // PLIC
   if(mappages(proc_kernel_pagetable, PLIC, 0x400000, PLIC, PTE_R | PTE_W) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : PLIC --(0x400000)-> PLIC");
 
   // map kernel text executable and read-only.
   if(mappages(proc_kernel_pagetable, KERNBASE, (uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : KERNBASE --((uint64)etext-KERNBASE)-> KERNBASE");
 
   // map kernel data and the physical RAM we'll make use of.
   if(mappages(proc_kernel_pagetable, (uint64)etext, PHYSTOP-(uint64)etext, (uint64)etext, PTE_R | PTE_W) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : (uint64)etext --(PHYSTOP-(uint64)etext)-> (uint64)etext");
 
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
   if(mappages(proc_kernel_pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X) != 0)
-    panic("kvminit_proc");
+    panic("kvminit_proc : TRAMPOLINE --(PGSIZE)-> (uint64)trampoline");
 
   return proc_kernel_pagetable;
 }
@@ -169,7 +169,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(getCurrPageTable(), va, 0); // 应该使用当前进程的内核页表
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -217,11 +217,11 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0)
+    if((pte = walk(pagetable, a, 0)) == 0) // 获取最后一级的PTE
       panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
+    if((*pte & PTE_V) == 0) // 
       panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
+    if(PTE_FLAGS(*pte) == PTE_V) // 只有V表示
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);

@@ -123,18 +123,19 @@ found:
   }
 
   // 创建每个进程的内核页表
-  p->pagetableKernal = kvminit_proc();
-  if(p->pagetableKernal == 0){
+  p->pagetableKernel = kvminit_proc();
+  if(p->pagetableKernel == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
 
+  // 为每个进程的内核页面申请内核栈
   char *pa = kalloc();
   if(pa == 0)
     panic("allocproc -> kalloc");
   uint64 va = KSTACK((int)(p - proc));
-  if(mappages(p->pagetableKernal, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0)
+  if(mappages(p->pagetableKernel, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0)
     panic("allocproc -> kvminit_proc");
   p->kstack = va;
 
@@ -147,6 +148,11 @@ found:
   return p;
 }
 
+pagetable_t getCurrPageTable()
+{
+  return myproc()->pagetableKernel;
+}
+
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
@@ -156,9 +162,21 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+
+  if(p->pagetableKernel)
+  {
+    if(p->kstack)
+      uvmunmap(p->pagetableKernel, p->kstack, 1, 1); // 释放进程内核栈对应的物理页面
+    p->kstack = 0;
+
+    proc_freeKernelpagetable(p->pagetableKernel); // 释放进程的内核页表
+  }
+  p->pagetableKernel = 0;
+
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -207,9 +225,25 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
-  uvmunmap(pagetable, TRAMPOLINE, 1, 0);
-  uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, TRAMPOLINE, 1, 0); // ? 检查页面？
+  uvmunmap(pagetable, TRAPFRAME, 1, 0); // ? 检查页面？
   uvmfree(pagetable, sz);
+}
+
+// 释放每个进程的内核页表，但不释放具体指向的物理内存
+void proc_freeKernelpagetable(pagetable_t pagetable)
+{
+  for(int i = 0; i < 512; ++i)
+  {
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && ((pte & (PTE_R | PTE_W | PTE_X)) == 0))
+    {
+      uint64 child = PTE2PA(pte);
+      proc_freeKernelpagetable((pagetable_t)child);
+      pagetable[i] = 0;
+    }
+  }
+  kfree((void*)pagetable);
 }
 
 // a user program that calls exec("/init")
@@ -486,7 +520,7 @@ scheduler(void)
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
         // 使用进程自己的内核页表
-        w_satp(MAKE_SATP(p->pagetableKernal));
+        w_satp(MAKE_SATP(p->pagetableKernel));
         sfence_vma();
 
         // Switch to chosen process.  It is the process's job

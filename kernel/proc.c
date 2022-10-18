@@ -297,6 +297,10 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+
+    // 扩充用户空间时将新的空间添加到映射
+    kvmmapuser(p->pagetableKernel, p->pagetable, sz + n, sz);
+
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -318,7 +322,7 @@ fork(void)
     return -1;
   }
 
-  // Copy user memory from parent to child.
+  // Copy user memory from parent to child. // fork时将所有物理页面全部复制
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
@@ -345,6 +349,9 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+  
+  // fork后，子进程的内核页面也有用户空间的映射
+  kvmmapuser(np->pagetableKernel, np->pagetable, np->sz, 0);
 
   release(&np->lock);
 

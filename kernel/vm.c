@@ -428,23 +428,62 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-  uint64 n, va0, pa0;
+  return copyin_new(pagetable, dst, srcva, len);
+  // uint64 n, va0, pa0;
 
-  while(len > 0){
-    va0 = PGROUNDDOWN(srcva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
-    n = PGSIZE - (srcva - va0);
-    if(n > len)
-      n = len;
-    memmove(dst, (void *)(pa0 + (srcva - va0)), n);
+  // while(len > 0){
+  //   va0 = PGROUNDDOWN(srcva);
+  //   pa0 = walkaddr(pagetable, va0);
+  //   if(pa0 == 0)
+  //     return -1;
+  //   n = PGSIZE - (srcva - va0);
+  //   if(n > len)
+  //     n = len;
+  //   memmove(dst, (void *)(pa0 + (srcva - va0)), n);
 
-    len -= n;
-    dst += n;
-    srcva = va0 + PGSIZE;
+  //   len -= n;
+  //   dst += n;
+  //   srcva = va0 + PGSIZE;
+  // }
+  // return 0;
+}
+
+// 将进程用户页表的pte拷贝到进程内核页表
+// kpgtable表示内核页表
+// upgtable表示用户页表
+// newsz表示拷贝用户空间虚拟地址结束位置（用到的空间）
+// oldsz表示拷贝用户空间虚拟地址起始位置（已经拷贝的空间），新进程从0开始拷贝，被扩容的进程在原大小的位置开始拷贝
+void kvmmapuser(pagetable_t kpgtable, pagetable_t upgtable, uint64 newsz, uint64 oldsz)
+{
+  uint64 va;
+  pte_t *upte, *kpte;
+
+  if(newsz >= PLIC)
+    panic("kvmmapuser: newsz is larger than PLIC\n");
+
+  for(va = oldsz; va < newsz; va += PGSIZE)
+  {
+    upte = walk(upgtable, va, 0); // 找到虚拟地址在用户页表的物理地址（最后一级pte），查找，不创建子页表
+    if(upte == 0)
+    {
+      printf("kvmmapuser: 0x%x 0x%s\n", va, newsz);
+      panic("kvmmapuser: no upte\n");
+    }
+    if((*upte & PTE_V) == 0)
+    {
+      printf("kvmmapuser: no valid pte 0x%x 0x%s\n", va, newsz);
+      panic("kvmmapuser: no valid upte\n");
+    }
+
+    kpte = walk(kpgtable, va, 1); // 在内核页表创建虚拟地址对应的所有子页表
+    if(kpte == 0)
+    {
+      panic("kvmmapuser: no kpte\n");
+    }
+
+    *kpte = *upte;
+    *kpte &= ~(PTE_U | PTE_W | PTE_X); // 用户不可访问，内核仅可读
   }
-  return 0;
 }
 
 // Copy a null-terminated string from user to kernel.

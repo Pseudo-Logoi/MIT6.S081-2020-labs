@@ -121,7 +121,7 @@ exec(char *path, char **argv)
     vmprint(p->pagetable);
 
   // 将用户空间的页表复制到内核页表
-  kvmmapuser(p->pagetableKernel, p->pagetable, sz, 0);
+  kvmmapuser(p->pagetableKernel, p->pagetable, p->sz, 0);
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 

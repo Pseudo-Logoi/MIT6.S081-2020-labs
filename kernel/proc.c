@@ -269,7 +269,7 @@ userinit(void)
   
   // allocate one user page and copy init's instructions
   // and data into it.
-  uvminit(p->pagetable, initcode, sizeof(initcode));
+  uvminit(p->pagetableKernel, p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
@@ -293,17 +293,22 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+
+  // 如果扩张空间后大于PLIC，则error
+  if(sz + n >= PLIC)
+    return -1;
+
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
-
-    // 扩充用户空间时将新的空间添加到映射
-    kvmmapuser(p->pagetableKernel, p->pagetable, sz + n, sz);
-
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
+
+  // 改变用户空间大小时将新的空间添加到映射
+  kvmmapuser(p->pagetableKernel, p->pagetable, sz, p->sz);
+
   p->sz = sz;
   return 0;
 }

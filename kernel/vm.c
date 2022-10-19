@@ -260,7 +260,7 @@ uvmcreate()
 // for the very first process.
 // sz must be less than a page.
 void
-uvminit(pagetable_t pagetable, uchar *src, uint sz)
+uvminit(pagetable_t kpagetable, pagetable_t upagetable, uchar *src, uint sz)
 {
   char *mem;
 
@@ -268,7 +268,11 @@ uvminit(pagetable_t pagetable, uchar *src, uint sz)
     panic("inituvm: more than a page");
   mem = kalloc();
   memset(mem, 0, PGSIZE);
-  mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U);
+  mappages(upagetable, 0, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U);
+
+  // 第一个进程单独处理，在内核页面添加用户页面
+  kvmmapuser(kpagetable, upagetable, PGSIZE, 0);
+
   memmove(mem, src, sz);
 }
 
@@ -461,6 +465,7 @@ void kvmmapuser(pagetable_t kpgtable, pagetable_t upgtable, uint64 newsz, uint64
   if(newsz >= PLIC)
     panic("kvmmapuser: newsz is larger than PLIC\n");
 
+  // 扩张
   for(va = oldsz; va < newsz; va += PGSIZE)
   {
     upte = walk(upgtable, va, 0); // 找到虚拟地址在用户页表的物理地址（最后一级pte），查找，不创建子页表
@@ -482,7 +487,18 @@ void kvmmapuser(pagetable_t kpgtable, pagetable_t upgtable, uint64 newsz, uint64
     }
 
     *kpte = *upte;
-    *kpte &= ~(PTE_U | PTE_W | PTE_X); // 用户不可访问，内核仅可读
+    *kpte &= ~(PTE_U | PTE_W | PTE_X); // 内核可访问，内核仅可读
+  }
+
+  // 收缩
+  for(va = newsz; va < oldsz; va += PGSIZE)
+  {
+    kpte = walk(kpgtable, va, 0);
+    if(kpte == 0)
+    {
+      panic("kvmmapuser: no kpte\n");
+    }
+    *kpte &= ~PTE_V; // 取消有效位
   }
 }
 
@@ -493,40 +509,41 @@ void kvmmapuser(pagetable_t kpgtable, pagetable_t upgtable, uint64 newsz, uint64
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
-  uint64 n, va0, pa0;
-  int got_null = 0;
+  return copyinstr_new(pagetable, dst, srcva, max);
+  // uint64 n, va0, pa0;
+  // int got_null = 0;
 
-  while(got_null == 0 && max > 0){
-    va0 = PGROUNDDOWN(srcva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
-    n = PGSIZE - (srcva - va0);
-    if(n > max)
-      n = max;
+  // while(got_null == 0 && max > 0){
+  //   va0 = PGROUNDDOWN(srcva);
+  //   pa0 = walkaddr(pagetable, va0);
+  //   if(pa0 == 0)
+  //     return -1;
+  //   n = PGSIZE - (srcva - va0);
+  //   if(n > max)
+  //     n = max;
 
-    char *p = (char *) (pa0 + (srcva - va0));
-    while(n > 0){
-      if(*p == '\0'){
-        *dst = '\0';
-        got_null = 1;
-        break;
-      } else {
-        *dst = *p;
-      }
-      --n;
-      --max;
-      p++;
-      dst++;
-    }
+  //   char *p = (char *) (pa0 + (srcva - va0));
+  //   while(n > 0){
+  //     if(*p == '\0'){
+  //       *dst = '\0';
+  //       got_null = 1;
+  //       break;
+  //     } else {
+  //       *dst = *p;
+  //     }
+  //     --n;
+  //     --max;
+  //     p++;
+  //     dst++;
+  //   }
 
-    srcva = va0 + PGSIZE;
-  }
-  if(got_null){
-    return 0;
-  } else {
-    return -1;
-  }
+  //   srcva = va0 + PGSIZE;
+  // }
+  // if(got_null){
+  //   return 0;
+  // } else {
+  //   return -1;
+  // }
 }
 
 void vmprint(pagetable_t firstPA)

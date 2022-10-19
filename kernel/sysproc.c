@@ -70,6 +70,10 @@ sys_sleep(void)
     sleep(&ticks, &tickslock);
   }
   release(&tickslock);
+
+  // 查看sleep的调用
+  backtrace();
+
   return 0;
 }
 

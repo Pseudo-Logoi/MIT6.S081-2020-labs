@@ -99,3 +99,26 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+
+uint64 sys_sigalarm()
+{
+  struct proc *p = myproc();
+  if(argint(0, &p->sigalarm_interval) < 0)
+    return -1;
+
+  if(argaddr(1, &p->sigalarm_handler) < 0)
+    return -1;
+
+  p->sigalarm_curr = 0;
+
+  return 0;
+}
+
+uint64 sys_sigreturn()
+{
+  struct proc *p = myproc();
+  *(p->trapframe) = *(p->sigalarm_context); // 恢复所有寄存器
+  p->sigalarm_handler_finish = 1;
+  return 0;
+}

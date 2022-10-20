@@ -138,9 +138,9 @@ void backtrace(void)
 {
   printf("backtrace: \n");
   uint64 fp = r_fp();
-  while(fp != PGROUNDDOWN(fp))
+  while(PGROUNDUP(fp) != PGROUNDDOWN(fp))
   {
-    printf("  %p\n", *(uint64*)(fp - 8)); // 返回地址
+    printf("%p\n", *(uint64*)(fp - 8)); // 返回地址
     fp = *(uint64*)(fp - 16); // 上一个fp
   }
 }

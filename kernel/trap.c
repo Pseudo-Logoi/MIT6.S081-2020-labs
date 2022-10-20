@@ -78,7 +78,20 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
-    yield();
+  {
+    if(p->sigalarm_interval != 0 && p->sigalarm_handler_finish == 1)
+    {
+      p->sigalarm_curr++;
+      if(p->sigalarm_curr == p->sigalarm_interval)
+      {
+        p->sigalarm_curr = 0;
+        p->sigalarm_handler_finish = 0;
+        *(p->sigalarm_context) = *(p->trapframe); // 保存所有寄存器
+        p->trapframe->epc = p->sigalarm_handler;
+      }
+    }
+    yield(); // 当前进程放弃CPU
+  }
 
   usertrapret();
 }

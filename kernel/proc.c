@@ -127,6 +127,16 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // 初始化用于alarm的参数
+  p->sigalarm_interval = 0;
+  p->sigalarm_curr = 0;
+  p->sigalarm_handler = 0;
+  p->sigalarm_handler_finish = 1;
+  if((p->sigalarm_context = (struct trapframe *)kalloc()) == 0){
+    release(&p->lock);
+    return 0;
+  }
+
   return p;
 }
 
@@ -150,6 +160,14 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  // alarm相关
+  p->sigalarm_interval = 0;
+  p->sigalarm_curr = 0;
+  p->sigalarm_handler = 0;
+  p->sigalarm_handler_finish = 1;
+  if(p->sigalarm_context)
+    kfree((void*)p->sigalarm_context);
 }
 
 // Create a user page table for a given process,
@@ -449,10 +467,10 @@ wait(uint64 addr)
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
+//  - choose a process to run.选择要运行的进程。
+//  - swtch to start running that process.切换以开始运行该进程。
 //  - eventually that process transfers control
-//    via swtch back to the scheduler.
+//    via swtch back to the scheduler.最终，该进程通过swtch将控制权传递回调度程序。
 void
 scheduler(void)
 {

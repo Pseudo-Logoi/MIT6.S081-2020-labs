@@ -41,15 +41,25 @@ sys_wait(void)
 uint64
 sys_sbrk(void)
 {
-  int addr;
+  // 获取输入参数
   int n;
-
   if(argint(0, &n) < 0)
     return -1;
-  addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
-  return addr;
+
+  // 更新进程的sz，如果扩张，进改变sz
+  struct proc *p = myproc();
+  uint64 oldsz = p->sz;
+  uint64 newsz = oldsz + n;
+  p->sz = newsz;
+
+  // 如果收缩，根据收缩大小将pte设置为无效
+  if(newsz < oldsz)
+  {
+    uint64 startpage = PGROUNDUP(newsz), endpage = PGROUNDDOWN(oldsz);
+    uvmunmap(p->pagetable, startpage, (endpage - startpage) / PGSIZE + 1, 1);
+  }
+
+  return oldsz;
 }
 
 uint64

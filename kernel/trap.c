@@ -65,6 +65,36 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15 || r_scause() == 13) // 页面错误 || r_scause() == 12
+  {
+    // static int pagefaultcount = 0;
+    // printf("%d ", pagefaultcount++);
+    // printf("%d -> %p", pagefaultcount++, r_stval());
+    // printf("page fault : pid=%d\n", p->pid);
+
+    uint64 va = r_stval();
+    char *mem;
+
+    if(va <= PGROUNDUP(p->trapframe->sp) - 1 || p->sz <= va) // 出错的虚拟地址
+    {
+      // printf("page fault error: wrong va\n");
+      exit(-1);
+    }
+
+    if((mem = kalloc()) == 0)
+    {
+      // printf("page fault : kalloc fail\n");
+      exit(-1);
+    }
+
+    memset(mem, 0, PGSIZE);
+
+    if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0) 
+    {
+      // printf("page fault : mappages fail\n");
+      kfree(mem);
+      exit(-1);
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

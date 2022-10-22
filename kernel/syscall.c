@@ -68,6 +68,35 @@ int
 argaddr(int n, uint64 *ip)
 {
   *ip = argraw(n);
+
+  struct proc* p = myproc();
+ 
+  // 处理传入参数是未分配空间问题
+  if(walkaddr(p->pagetable, *ip) == 0)
+  {
+    if(*ip <= PGROUNDUP(p->trapframe->sp) - 1 || p->sz <= *ip) // 未分配的虚拟地址
+    {
+      // printf("page fault error: wrong va\n");
+      return -1;
+    }
+
+    char *mem;
+    if((mem = kalloc()) == 0)
+    {
+      // printf("page fault : kalloc fail\n");
+      return -1;
+    }
+
+    memset(mem, 0, PGSIZE);
+
+    if(mappages(p->pagetable, PGROUNDDOWN(*ip), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0) 
+    {
+      // printf("page fault : mappages fail\n");
+      kfree(mem);
+      return -1;
+    }
+  }
+
   return 0;
 }
 

@@ -25,12 +25,20 @@ barrier_init(void)
 static void 
 barrier()
 {
-  // YOUR CODE HERE
-  //
-  // Block until all threads have called barrier() and
-  // then increment bstate.round.
-  //
-  
+  pthread_mutex_lock(&bstate.barrier_mutex);
+
+  if(++bstate.nthread != nthread)
+    // wait中会释放锁pthread_mutex_unlock
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    // wait结束会获取锁pthread_mutex_lock
+  else
+  {
+    pthread_cond_broadcast(&bstate.barrier_cond);
+    bstate.round++;
+    bstate.nthread = 0;
+  }
+
+  pthread_mutex_unlock(&bstate.barrier_mutex);
 }
 
 static void *

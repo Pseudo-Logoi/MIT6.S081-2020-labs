@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.cc": "cpp",
+        "*.cu": "cpp",
+        "stat.h": "c",
+        "types.h": "c",
+        "user.h": "c",
+        "proc.h": "c",
+        "pthread.h": "c",
+        "cmath": "c"
+    }
+}

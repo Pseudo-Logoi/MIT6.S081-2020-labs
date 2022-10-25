@@ -13,6 +13,7 @@ struct entry {
   int value;
   struct entry *next;
 };
+pthread_mutex_t lock[NBUCKET];
 struct entry *table[NBUCKET];
 int keys[NKEYS];
 int nthread = 1;
@@ -51,7 +52,9 @@ void put(int key, int value)
     e->value = value;
   } else {
     // the new is new.
+    pthread_mutex_lock(&lock[i]);
     insert(key, value, &table[i], table[i]);
+    pthread_mutex_unlock(&lock[i]);
   }
 }
 
@@ -76,7 +79,7 @@ put_thread(void *xa)
   int b = NKEYS/nthread;
 
   for (int i = 0; i < b; i++) {
-    put(keys[b*n + i], n);
+    put(keys[b*n + i], n); // 每个线程负责keys中的一部分
   }
 
   return NULL;
@@ -114,6 +117,9 @@ main(int argc, char *argv[])
   for (int i = 0; i < NKEYS; i++) {
     keys[i] = random();
   }
+  // 初始化锁
+  for(int i = 0; i < NBUCKET; i++)
+    pthread_mutex_init(&lock[i], NULL);
 
   //
   // first the puts

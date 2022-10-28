@@ -69,12 +69,12 @@ balloc(uint dev)
 
   bp = 0;
   for(b = 0; b < sb.size; b += BPB){
-    bp = bread(dev, BBLOCK(b, sb));
+    bp = bread(dev, BBLOCK(b, sb)); // 读取bmap块
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
       m = 1 << (bi % 8);
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
-        log_write(bp);
+        log_write(bp); // 将bmap的变更记录在log中
         brelse(bp);
         bzero(dev, b + bi);
         return b + bi;
@@ -380,14 +380,14 @@ bmap(struct inode *ip, uint bn)
   uint addr, *a;
   struct buf *bp;
 
-  if(bn < NDIRECT){
+  if(bn < NDIRECT){  // 如果在直接块范围内，
     if((addr = ip->addrs[bn]) == 0)
       ip->addrs[bn] = addr = balloc(ip->dev);
     return addr;
   }
   bn -= NDIRECT;
 
-  if(bn < NINDIRECT){
+  if(bn < NINDIRECT){ // 如果在一级间接块范围内
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
       ip->addrs[NDIRECT] = addr = balloc(ip->dev);
@@ -400,8 +400,53 @@ bmap(struct inode *ip, uint bn)
     brelse(bp);
     return addr;
   }
+  bn -= NINDIRECT;
+
+  if(bn < NDOUBLYINDIRECT) // 如果在二级间接块范围内
+  {
+    // 获取二级间接块
+    if((addr = ip->addrs[NDIRECT + 1]) == 0)
+      ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    // 获取一级间接块
+    if((addr = a[bn / NINDIRECT]) == 0)
+    {  
+      a[bn / NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    // 获取数据块
+    if((addr = a[bn % NINDIRECT]) == 0)
+    {
+      a[bn % NINDIRECT] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
 
   panic("bmap: out of range");
+}
+
+void itrunc_r(uint dev, uint inode, int level)
+{
+  if(level > 0)
+  {
+    struct buf *bp = bread(dev, inode);
+    uint* a = (uint*)bp->data;
+    for(int j = 0; j < NINDIRECT; ++j)
+    {
+      if(a[j])
+        itrunc_r(dev, a[j], level - 1);
+    }
+    brelse(bp);
+  }
+  bfree(dev, inode);
 }
 
 // Truncate inode (discard contents).
@@ -409,27 +454,23 @@ bmap(struct inode *ip, uint bn)
 void
 itrunc(struct inode *ip)
 {
-  int i, j;
-  struct buf *bp;
-  uint *a;
-
-  for(i = 0; i < NDIRECT; i++){
+  for(int i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
-      bfree(ip->dev, ip->addrs[i]);
+      itrunc_r(ip->dev, ip->addrs[i], 0);
       ip->addrs[i] = 0;
     }
   }
 
-  if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
-    a = (uint*)bp->data;
-    for(j = 0; j < NINDIRECT; j++){
-      if(a[j])
-        bfree(ip->dev, a[j]);
-    }
-    brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
+  if(ip->addrs[NDIRECT])
+  {
+    itrunc_r(ip->dev, ip->addrs[NDIRECT], 1); // 释放一级间接块
     ip->addrs[NDIRECT] = 0;
+  }
+
+  if(ip->addrs[NDIRECT + 1])
+  {
+    itrunc_r(ip->dev, ip->addrs[NDIRECT + 1], 2); // 释放二级间接块
+    ip->addrs[NDIRECT + 1] = 0;
   }
 
   ip->size = 0;
@@ -495,13 +536,13 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
     return -1;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
-    bp = bread(ip->dev, bmap(ip, off/BSIZE));
-    m = min(n - tot, BSIZE - off%BSIZE);
+    bp = bread(ip->dev, bmap(ip, off/BSIZE)); // 获取该文件指定的文件偏移的块的inode
+    m = min(n - tot, BSIZE - off%BSIZE); // 如果该块剩余位置不够写入，则仅写入剩余部分
     if(either_copyin(bp->data + (off % BSIZE), user_src, src, m) == -1) {
       brelse(bp);
       break;
     }
-    log_write(bp);
+    log_write(bp); // 给这个块分配一个log块
     brelse(bp);
   }
 

@@ -160,7 +160,7 @@ concur(void)
       for(i = 0; i < 100; i++){
         x = x * 1103515245 + 12345;
         if((x % 3) == 0) {
-          symlink("/testsymlink/z", "/testsymlink/y");
+          symlink("/testsymlink/z", "/testsymlink/y"); // y->z
           if (stat_slink("/testsymlink/y", &st) == 0) {
             m++;
             if(st.type != T_SYMLINK) {

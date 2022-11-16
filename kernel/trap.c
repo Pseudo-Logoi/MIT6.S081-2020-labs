@@ -65,6 +65,24 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 13 || r_scause() == 15) {
+    uint64 va = r_stval(); // page fault 的 虚拟地址
+    int i = 0;
+    for(; i < 16; ++i)
+    {
+      if(p->vmas[i].addr <= va && va < p->vmas[i].addr + p->vmas[i].length)
+      {
+        if(handleVMA(p, &p->vmas[i], va) < 0)
+          p->killed = 1;
+        break;
+      }
+    }
+    if(i == 16)
+    {
+      printf("virtual address isn't be mmaped.\n");
+      p->killed = 1;
+    }
+
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

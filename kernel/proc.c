@@ -302,6 +302,15 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  for(i = 0; i < 16; ++i)
+  {
+    if(p->vmas[i].length != 0)
+    {
+      np->vmas[i] = p->vmas[i];
+      filedup(p->vmas[i].f);
+    }
+  }
+
   release(&np->lock);
 
   return pid;

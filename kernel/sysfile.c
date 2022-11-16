@@ -484,3 +484,181 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// handleVMA(p, p->vmas[i], va);
+int handleVMA(struct proc *p, struct vma* v, uint64 va)
+{
+  // 申请一个物理页面
+  uint64 pa;
+  if((pa = (uint64)kalloc()) == 0)
+    return -1;
+
+  // 先清空为0
+  memset((void*)pa, 0, PGSIZE);
+
+  // 将文件的内容复制到这个物理页面，复制4096个字节
+  int npage = (va - v->addr) / PGSIZE;
+  ilock(v->f->ip);
+  if(readi(v->f->ip, 0, pa, v->offset + npage * PGSIZE, PGSIZE) < 0)
+    return -1;
+  iunlock(v->f->ip);
+
+  if(mappages(p->pagetable, va, PGSIZE, pa, (v->port << 1) | PTE_U) < 0)// v->port << 1
+  {
+    kfree((void*)pa);
+    return -1;
+  }
+
+  return 0;
+}
+
+uint64 sys_mmap(void)
+{
+  uint64 addr;
+  int length, port, flags, fd, offset;
+  struct file *f;
+  if(argaddr(0, &addr) < 0 || argint(1, &length) < 0 || argint(2, &port) < 0||
+     argint(3, &flags) < 0 || argfd(4, &fd, &f) < 0 || argint(5, &offset) < 0)
+    return -1; // 0xffffffffffffffff
+  
+  printf("    before mmap: addr: %p, len: %d * PGSIZE + %d\n", addr, length / PGSIZE, length % PGSIZE);
+
+  if(f->writable == 0 && port & PROT_WRITE && flags == MAP_SHARED)
+    return -1;
+
+  struct proc *p = myproc();
+
+  if(addr < p->sz)
+    addr = p->sz; // 用户不指定则自动分配
+
+  // 找一个空闲的vma位置
+  int i = 0;
+  for(; i < 16; ++i)
+  {
+    if(p->vmas[i].length == 0)
+    {
+      p->vmas[i].addr = addr;    
+      p->vmas[i].length = length;
+      p->vmas[i].port = port;    
+      p->vmas[i].flags = flags;
+      p->vmas[i].fd = fd;
+      p->vmas[i].f = f;
+      p->vmas[i].offset = offset;
+      break;
+    }
+  }
+  if(i == 16)
+    return -1; // 没有空闲位置
+
+  p->sz += length; // 惰性分配
+
+  filedup(f); // 文件增加引用，防止文件被释放
+
+  printf("    after mmap: [%p, %p)\n", addr, addr + length);
+  return addr;
+}
+
+uint64 sys_munmap(void)
+{
+  // 获取输入参数
+  uint64 addr;
+  int length;
+  if(argaddr(0, &addr) < 0 || argint(1, &length) < 0 || length <= 0)
+    return -1; // 0xffffffffffffffff
+
+  printf("    before munmap: addr: %p, len: %d * PGSIZE + %d\n", addr, length / PGSIZE, length % PGSIZE);
+
+  // 查找这个addr对应哪个vma
+  struct proc *p = myproc();
+  struct vma *targetvma;
+  {
+    int i = 0;
+    for(; i < 16; ++i)
+    {
+      if(p->vmas[i].addr <= addr && (addr + length) <= (p->vmas[i].addr + p->vmas[i].length)) // 判断输入的范围需要满足条件
+        break;
+    }
+    if(i == 16)
+      return -1;
+    targetvma = &p->vmas[i];
+  }
+
+  // 如果是share模式，则需要写回文件
+  if(targetvma->flags == MAP_SHARED)
+  {
+    int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE; // 最多可以一次性写入的字节
+    int curOff = targetvma->offset + (addr - targetvma->addr); // 根据输入地址计算文件起始偏移
+
+    int tarLength = length;
+    if(targetvma->f->ip->size < tarLength + curOff) // 要写入的内容超过了文件大小
+      tarLength = targetvma->f->ip->size - curOff;
+    tarLength = tarLength < 0 ? 0 : tarLength;
+
+    printf("        tarLength: %d\n", tarLength);
+    int i = 0; // i为已写入的在字节
+    while(i < tarLength){
+      int curLen = tarLength - i;
+      if(curLen > max)
+        curLen = max; // 如果写入的字节过多，则写max个字节
+
+      printf("        start write file[%d]: start va %p, start offset %d, len %d\n", targetvma->fd, addr + i, curOff, curLen);
+      begin_op();
+      ilock(targetvma->f->ip);
+      int r; // writei写入了多少字节
+      if ((r = writei(targetvma->f->ip, 1, addr + i, curOff, curLen)) > 0)
+      {
+        curOff += r;
+      }
+      iunlock(targetvma->f->ip);
+      end_op();
+      printf("          end write file[%d]: file offset %d, ip size %d\n", targetvma->fd, targetvma->f->off, targetvma->f->ip->size);
+      if(r != curLen){
+        // error from writei
+        break;
+      }
+      i += r;
+    }
+    if(i != tarLength)
+    {
+      printf("        wrong write file, %d\n", i);
+      return -1;
+    }
+  }
+
+  // 取消映射并释放物理页面
+  // 暂不考虑对齐
+  uvmunmap(p->pagetable, addr, length / PGSIZE, 1);
+
+  // 因为不会在区域上打洞（题目要求），所以有且仅有以下几种情况：全部取消、取消前半部分、取消后半部分
+  // 情况1：map的区域被全部取消
+  if(addr == targetvma->addr && length == targetvma->length)
+  {
+    // 释放文件
+    fileclose(targetvma->f);
+    // 归零这个vma
+    targetvma->length = 0; // 长度记为0，使得其可以被重用
+    // 更新进程的大小
+    int maxsz = 0, tempsz;
+    for(int i = 0; i < 16; ++i)
+    {
+      if((tempsz = p->vmas[i].addr + p->vmas[i].length) > maxsz)
+        maxsz = tempsz;
+    }
+    p->sz = maxsz;
+  }
+  // 情况2：取消前半部分，addr，length，offset都需要修改
+  else if(addr == targetvma->addr) // addr相等，length相等，则是在取消前半部分
+  {
+    targetvma->addr += length;
+    targetvma->length -= length;
+    targetvma->offset += length;
+  }
+  // 情况3：取消后半部分，仅更新length即可
+  else 
+  {
+    targetvma->length -= length;
+  }
+
+  printf("    after munmap: [%p, %p)\n", targetvma->addr, targetvma->addr + targetvma->length);
+  return 0;
+}

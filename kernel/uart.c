@@ -16,8 +16,7 @@
 #define Reg(reg) ((volatile unsigned char *)(UART0 + reg))
 
 // the UART control registers.
-// some have different meanings for
-// read vs write.
+// some have different meanings for read vs write.
 // see http://byterunner.com/16550.html
 #define RHR 0                 // receive holding register (for input bytes)
 #define THR 0                 // transmit holding register (for output bytes)
@@ -53,25 +52,31 @@ void
 uartinit(void)
 {
   // disable interrupts.
+  // 禁用中断。
   WriteReg(IER, 0x00);
 
   // special mode to set baud rate.
+  // 设置波特率的特殊模式。
   WriteReg(LCR, LCR_BAUD_LATCH);
 
   // LSB for baud rate of 38.4K.
+  // 波特率为38.4K的LSB。
   WriteReg(0, 0x03);
 
   // MSB for baud rate of 38.4K.
+  // 38.4K波特率的MSB。
   WriteReg(1, 0x00);
 
-  // leave set-baud mode,
-  // and set word length to 8 bits, no parity.
+  // leave set-baud mode, and set word length to 8 bits, no parity.
+  // 保留设置波特模式，并将字长度设置为8位，无奇偶校验。
   WriteReg(LCR, LCR_EIGHT_BITS);
 
   // reset and enable FIFOs.
+  // 重置并启用FIFO。
   WriteReg(FCR, FCR_FIFO_ENABLE | FCR_FIFO_CLEAR);
 
   // enable transmit and receive interrupts.
+  // 启用发送和接收中断。
   WriteReg(IER, IER_TX_ENABLE | IER_RX_ENABLE);
 
   initlock(&uart_tx_lock, "uart");

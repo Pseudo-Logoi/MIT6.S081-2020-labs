@@ -3,6 +3,7 @@
 // from the Intel 82540EP/EM &c manual.
 //
 
+// ? 为什么左移两位（/4）
 /* Registers */
 #define E1000_CTL      (0x00000/4)  /* Device Control Register - RW */
 #define E1000_ICR      (0x000C0/4)  /* Interrupt Cause Read - R */
@@ -99,9 +100,9 @@
 // [E1000 3.3.3]
 struct tx_desc
 {
-  uint64 addr;
-  uint16 length;
-  uint8 cso;
+  uint64 addr;   // 发送数据地址
+  uint16 length; // 发送数据长度
+  uint8 cso;     // 
   uint8 cmd;
   uint8 status;
   uint8 css;

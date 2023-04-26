@@ -20,3 +20,4 @@ submissions/
 .gdbinit
 .vagrant/
 .vscode/
+.clang-format

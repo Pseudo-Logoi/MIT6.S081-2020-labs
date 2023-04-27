@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "*.cc": "cpp",
+        "*.cu": "cpp",
+        "user.h": "c",
+        "types.h": "c",
+        "stat.h": "c",
+        "fs.h": "c",
+        "param.h": "c",
+        "proc.h": "c",
+        "memlayout.h": "c",
+        "defs.h": "c",
+        "riscv.h": "c",
+        "spinlock.h": "c",
+        "sleeplock.h": "c"
+    }
+}

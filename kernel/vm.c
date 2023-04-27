@@ -299,6 +299,52 @@ uvmfree(pagetable_t pagetable, uint64 sz)
   freewalk(pagetable);
 }
 
+// 返回0表示va不是cow page的地址
+// 返回1表示va是cow page的地址
+int isCOWpage(pagetable_t pagetable, uint64 va)
+{
+  if(va >= MAXVA)
+    return 0;
+  pte_t *vapte = walk(pagetable, va, 0);
+  if(vapte == 0 || (*vapte & PTE_V) == 0 || (*vapte & PTE_RSW0) == 0)
+  {
+    return 0;
+  }
+  return 1;
+}
+
+// 返回0表示错误
+// 返回新的物理地址表示复制成功
+void * handleCOWpage(pagetable_t pagetable, uint64 va)
+{
+  pte_t *vapte = walk(pagetable, va, 0);
+  uint64 oldpa = PTE2PA(*vapte);
+
+  // 引用计数为1，则无须kalloc，直接使用原页面即可
+  if(getRefCount((void *)oldpa) == 1)
+  {
+    *vapte |= PTE_W;
+    *vapte &= ~(PTE_RSW0);
+    return (void*)oldpa;
+  }
+
+  // 引用计数大于1，需要kalloc
+  char *newpa;
+  if((newpa = kalloc()) == 0)
+  {
+    printf("handleCOWfork: no more mem\n");
+    return 0;
+  }
+  memmove(newpa, (char*)oldpa, PGSIZE);
+
+  *vapte = PA2PTE((uint64)newpa) | PTE_FLAGS(*vapte) | PTE_W;
+  *vapte &= ~(PTE_RSW0);
+
+  kfree((void*)oldpa); // 引用计数-1
+
+  return (void*)newpa;
+}
+
 // Given a parent process's page table, copy
 // its memory into a child's page table.
 // Copies both the page table and the
@@ -308,31 +354,46 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
-  uint64 pa, i;
-  uint flags;
-  char *mem;
+  pte_t *oldpte, *newpte;
 
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
-    pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+  for(uint64 i = 0; i < sz; i += PGSIZE)
+  {
+    if((oldpte = walk(old, i, 0)) == 0)
+      panic("uvmcopy: pte should exist\n");
+    if((*oldpte & PTE_V) == 0)
+      panic("uvmcopy: page not present\n");
+
+    if((newpte = walk(new, i, 1)) == 0)
+    {
+      // printf("uvmcopy: no more mem\n");
+
+      // 恢复父进程的页表
+      for(i -= PGSIZE; i >= 0; i -= PGSIZE)
+      {
+        oldpte = walk(old, i, 0);
+        if(*oldpte & PTE_RSW0)
+        {
+          *oldpte &= ~(PTE_RSW0);
+          *oldpte |= PTE_W;
+        }
+      }
+
+      // 断开子进程页表与父进程物理页面之间的接连，释放物理页面（引用计数2->1）
+      uvmunmap(new, 0, i / PGSIZE, 1); 
+
+      return -1;
     }
+
+    // 仅将父进程可写页面设置为COW页面
+    if(*oldpte & PTE_W)
+    {
+      *oldpte &= ~(PTE_W); // 清除这个页面的可写标志
+      *oldpte |= PTE_RSW0; // 指示其是COW页面
+    }
+    *newpte = *oldpte;
+    addRefCount((void *)PTE2PA(*oldpte), 1); // 复制了pte，增加1个物理页面的引用计数
   }
   return 0;
-
- err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -359,6 +420,11 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
+
+    // 如果是COW页面，则将其更换为新的物理页面
+    if(isCOWpage(pagetable, va0))
+      pa0 = (uint64)handleCOWpage(pagetable, va0);
+
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);

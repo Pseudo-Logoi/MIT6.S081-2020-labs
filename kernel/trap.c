@@ -65,6 +65,14 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 13 || r_scause() == 15) // 处理页面错误
+  {
+    // printf("page fault\n");
+    uint64 va = r_stval(); // 出错的虚拟地址
+    if(va >= p->sz || 
+       isCOWpage(p->pagetable, va) == 0 ||
+       handleCOWpage(p->pagetable, va) == 0)
+      p->killed = 1;
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

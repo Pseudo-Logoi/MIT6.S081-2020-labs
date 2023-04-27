@@ -63,7 +63,8 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-
+void            addRefCount(void *pa, int n);
+int             getRefCount(void  *pa);
 // log.c
 void            initlog(int, struct superblock*);
 void            log_write(struct buf*);
@@ -163,6 +164,8 @@ pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
+int             isCOWpage(pagetable_t pagetable, uint64 va);
+void*           handleCOWpage(pagetable_t pagetable, uint64 va);
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
 void            uvmfree(pagetable_t, uint64);
 void            uvmunmap(pagetable_t, uint64, uint64, int);

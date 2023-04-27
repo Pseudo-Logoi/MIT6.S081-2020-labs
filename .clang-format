@@ -1,0 +1,30 @@
+BasedOnStyle: Google
+# Language: Cpp
+
+# 缩进相关
+UseTab: Never
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -4
+NamespaceIndentation: All
+FixNamespaceComments: true
+BreakBeforeBraces: Attach
+
+# 短的代码合并为一行
+AllowShortBlocksOnASingleLine: Always
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+
+# 对齐
+AlignConsecutiveMacros: AcrossEmptyLines
+AlignConsecutiveAssignments: Consecutive
+DerivePointerAlignment: false
+PointerAlignment: Left
+
+# 其他
+SortIncludes: Never
